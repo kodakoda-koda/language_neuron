@@ -8,9 +8,9 @@ from transformers import PreTrainedTokenizer
 
 
 class CustomDataset(Dataset):
-    def __init__(self, tokenizer: PreTrainedTokenizer, max_len: int, lang: str):
+    def __init__(self, tokenizer: PreTrainedTokenizer, max_length: int, lang: str):
         self.tokenizer = tokenizer
-        self.max_len = max_len
+        self.max_length = max_length
         self.lang = lang
         self.data = self.__load_dataset__()
         self.tokenized_data = self.__tokenize__()
@@ -58,7 +58,7 @@ class CustomDataset(Dataset):
     def __tokenize__(self) -> Dict[str, torch.Tensor]:
         tokenized_data = self.tokenizer.batch_encode_plus(
             self.data,
-            max_length=self.max_len,
+            max_length=self.max_length,
             padding="max_length",
             truncation=True,
             return_tensors="pt",
