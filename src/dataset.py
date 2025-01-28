@@ -1,19 +1,17 @@
-import random
 from typing import Dict, List
 
 import torch
-from datasets import load_dataset
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 
 
 class CustomDataset(Dataset):
-    def __init__(self, tokenizer: PreTrainedTokenizer, max_length: int, lang: str):
+    def __init__(self, data, tokenizer: PreTrainedTokenizer, max_length: int, lang: str, train_flag: bool = True):
+        self.tokenized_data = self.__tokenize__(data)
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.lang = lang
-        self.data = self.__load_dataset__()
-        self.tokenized_data = self.__tokenize__()
+        self.train_flag = train_flag
 
     def __getitem__(self, index):
         return {
@@ -24,40 +22,14 @@ class CustomDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-    def __load_dataset__(self) -> List[str]:
-        assert self.lang in [
-            "en",
-            "de",
-            "fr",
-            "es",
-            "zh",
-            "ja",
-        ], "lang must be one of ['en', 'de', 'fr', 'es', 'zh', 'ja']"
-
-        pawsx_ = load_dataset("google-research-datasets/paws-x", self.lang)
-        pawsx = pawsx_["train"]["sentence1"] + pawsx_["test"]["sentence1"] + pawsx_["validation"]["sentence1"]
-
-        flores_lang_set = {
-            "en": "eng_Latn",
-            "de": "deu_Latn",
-            "fr": "fra_Latn",
-            "es": "spa_Latn",
-            "zh": "zho_Hans",
-            "ja": "jpn_Jpan",
-        }
-        flores_lang = flores_lang_set[self.lang]
-        if flores_lang == "jpn_Jpan":
-            flores_ = load_dataset("facebook/flores", "jpn_Jpan-eng_Latn")
+    def __tokenize__(self, data: List[str]) -> Dict[str, torch.Tensor]:
+        if self.train_flag:
+            data = data[:len(data) * 0.8]
         else:
-            flores_ = load_dataset("facebook/flores", f"{flores_lang}-jpn_Jpan")
-        flores = flores_["dev"][f"sentence_{flores_lang}"] + flores_["devtest"][f"sentence_{flores_lang}"]
+            data = data[len(data) * 0.8:]
 
-        data = random.sample(pawsx, 250) + random.sample(flores, 250)
-        return data
-
-    def __tokenize__(self) -> Dict[str, torch.Tensor]:
         tokenized_data = self.tokenizer.batch_encode_plus(
-            self.data,
+            data,
             max_length=self.max_length,
             padding="max_length",
             truncation=True,
