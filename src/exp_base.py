@@ -1,4 +1,5 @@
 import argparse
+import logging
 import random
 
 import torch
@@ -10,7 +11,7 @@ from .dataset import CustomDataset
 
 
 class Exp_base:
-    def __init__(self, args: argparse.Namespace):
+    def __init__(self, args: argparse.Namespace, logger: logging.Logger):
         self.args = args
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.bfloat16 if args.dtype == "bfloat16" else torch.float32
