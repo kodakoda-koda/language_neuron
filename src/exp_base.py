@@ -2,9 +2,9 @@ import argparse
 import random
 
 import torch
-from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer
 from datasets import load_dataset
+from torch.utils.data import DataLoader
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
 from .dataset import CustomDataset
 
@@ -37,24 +37,27 @@ class Exp_base:
             "ja",
         ], "lang must be one of ['en', 'de', 'fr', 'es', 'zh', 'ja']"
 
+        # load paws-x dataset
         pawsx_ = load_dataset("google-research-datasets/paws-x", self.args.lang)
         pawsx = pawsx_["train"]["sentence1"] + pawsx_["test"]["sentence1"] + pawsx_["validation"]["sentence1"]
 
+        # load flores200 dataset
         flores_lang_set = {
-            "en": "eng_Latn",
-            "de": "deu_Latn",
-            "fr": "fra_Latn",
-            "es": "spa_Latn",
-            "zh": "zho_Hans",
-            "ja": "jpn_Jpan",
+            "en": "eng_Latn-jpn_Jpan",
+            "de": "deu_Latn-jpn_Jpan",
+            "fr": "fra_Latn-jpn_Jpan",
+            "es": "spa_Latn-jpn_Jpan",
+            "zh": "zho_Hans-jpn_Jpan",
+            "ja": "jpn_Jpan-eng_Latn",
         }
         flores_lang = flores_lang_set[self.args.lang]
-        if flores_lang == "jpn_Jpan":
-            flores_ = load_dataset("facebook/flores", "jpn_Jpan-eng_Latn")
-        else:
-            flores_ = load_dataset("facebook/flores", f"{flores_lang}-jpn_Jpan")
-        flores = flores_["dev"][f"sentence_{flores_lang}"] + flores_["devtest"][f"sentence_{flores_lang}"]
+        flores_ = load_dataset("facebook/flores", flores_lang)
+        flores = (
+            flores_["dev"][f"sentence_{flores_lang.split('-')[0]}"]
+            + flores_["test"][f"sentence_{flores_lang.split('-')[0]}"]
+        )
 
+        # sample 250 data from each dataset
         data = random.sample(pawsx, 250) + random.sample(flores, 250)
 
         dataset = CustomDataset(data, self.tokenizer, self.args.max_length, self.args.lang, train_flag)
