@@ -7,12 +7,13 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
-from .dataset import CustomDataset
+from dataset import CustomDataset
 
 
 class Exp_base:
     def __init__(self, args: argparse.Namespace, logger: logging.Logger):
         self.args = args
+        self.logger = logger
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.bfloat16 if args.dtype == "bfloat16" else torch.float32
 
@@ -55,7 +56,7 @@ class Exp_base:
         flores_ = load_dataset("facebook/flores", flores_lang)
         flores = (
             flores_["dev"][f"sentence_{flores_lang.split('-')[0]}"]
-            + flores_["test"][f"sentence_{flores_lang.split('-')[0]}"]
+            + flores_["devtest"][f"sentence_{flores_lang.split('-')[0]}"]
         )
 
         # sample 250 data from each dataset

@@ -5,7 +5,7 @@ import warnings
 import transformers
 from transformers import set_seed
 
-from .exp_main import Exp_main
+from exp_main import Exp_main
 
 warnings.filterwarnings("ignore")
 transformers.logging.set_verbosity_error()
@@ -15,12 +15,13 @@ def main():
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=2024)
-    parser.add_argument("--max_length", type=int, default=512)
+    parser.add_argument("--max_length", type=int, default=64)
     parser.add_argument("--lang", type=str, default="en")
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--dtype", type=str, default="float32")
-    parser.add_argument("--lm_name", type=str, default="t5-base")
-    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--dtype", type=str, default="bfloat16")
+    parser.add_argument("--lm_name", type=str, default="facebook/xglm-564M")
+    parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--num_epochs", type=int, default=3)
     args = parser.parse_args()
 
     # set seed
