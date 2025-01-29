@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
 from dataset import CustomDataset
+from model.xglm import CustomXGLMForCausalLM
 
 
 class Exp_base:
@@ -21,7 +22,8 @@ class Exp_base:
         self.tokenizer = self._bulid_tokenizer()
 
     def _build_model(self) -> PreTrainedModel:
-        model = AutoModelForCausalLM.from_pretrained(self.args.lm_name)
+        # model = AutoModelForCausalLM.from_pretrained(self.args.lm_name)
+        model = CustomXGLMForCausalLM.from_pretrained(self.args.lm_name)
         model = model.to(self.device).to(self.dtype)
         return model
 
@@ -62,6 +64,6 @@ class Exp_base:
         # sample 250 data from each dataset
         data = random.sample(pawsx, 250) + random.sample(flores, 250)
 
-        dataset = CustomDataset(data, self.tokenizer, self.args.max_length, self.args.lang, train_flag)
+        dataset = CustomDataset(data, self.tokenizer, self.args.max_length, train_flag)
         dataloader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=train_flag)
         return dataloader
