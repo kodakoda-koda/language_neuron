@@ -1,4 +1,7 @@
+import random
+
 import pytest
+from datasets import load_dataset
 from transformers import AutoTokenizer
 
 from src.dataset import CustomDataset
@@ -11,9 +14,10 @@ def tokenizer():
 
 class TestCustomDataset:
     def test_dataset(self, tokenizer):
-        dataset = CustomDataset(tokenizer=tokenizer, max_length=512, lang="en")
+        data = self._load_data("en")
+        dataset = CustomDataset(data=data, tokenizer=tokenizer, max_length=512, train_flag=True)
 
-        assert len(dataset) == 500
+        assert len(dataset) == int(500 * 0.8)
 
         for i in range(len(dataset)):
             batch = dataset[i]
@@ -22,8 +26,26 @@ class TestCustomDataset:
             assert batch["input_ids"].shape == (512,)
             assert batch["attention_mask"].shape == (512,)
 
-    def test_invalid_lang(self, tokenizer):
-        with pytest.raises(AssertionError) as e:
-            CustomDataset(tokenizer=tokenizer, max_length=512, lang="hi")
+    def _load_data(self, lang):
+        pawsx_ = load_dataset("google-research-datasets/paws-x", lang)
+        pawsx = pawsx_["train"]["sentence1"] + pawsx_["test"]["sentence1"] + pawsx_["validation"]["sentence1"]
 
-        assert str(e.value) == "lang must be one of ['en', 'de', 'fr', 'es', 'zh', 'ja']"
+        # load flores200 dataset
+        flores_lang_set = {
+            "en": "eng_Latn-jpn_Jpan",
+            "de": "deu_Latn-jpn_Jpan",
+            "fr": "fra_Latn-jpn_Jpan",
+            "es": "spa_Latn-jpn_Jpan",
+            "zh": "zho_Hans-jpn_Jpan",
+            "ja": "jpn_Jpan-eng_Latn",
+        }
+        flores_lang = flores_lang_set[lang]
+        flores_ = load_dataset("facebook/flores", flores_lang)
+        flores = (
+            flores_["dev"][f"sentence_{flores_lang.split('-')[0]}"]
+            + flores_["devtest"][f"sentence_{flores_lang.split('-')[0]}"]
+        )
+
+        # sample 250 data from each dataset
+        data = random.sample(pawsx, 250) + random.sample(flores, 250)
+        return data

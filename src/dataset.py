@@ -11,12 +11,10 @@ class CustomDataset(Dataset):
         data: List[str],
         tokenizer: PreTrainedTokenizer,
         max_length: int = 512,
-        lang: str = "en",
         train_flag: bool = True,
     ):
         self.tokenizer = tokenizer
         self.max_length = max_length
-        self.lang = lang
         self.train_flag = train_flag
         self.tokenized_data = self.__tokenize__(data)
 
