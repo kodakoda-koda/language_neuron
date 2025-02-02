@@ -5,9 +5,10 @@ from torch import nn
 from torch.nn import CrossEntropyLoss
 from transformers import XGLMForCausalLM, XGLMModel
 from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask, _prepare_4d_causal_attention_mask
-from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions, CausalLMOutputWithCrossAttentions
 from transformers.models.xglm.modeling_xglm import XGLMAttention, XGLMDecoderLayer
 from transformers.utils import logging
+
+from model.outputs import CustomBaseModelOutputWithPastAndCrossAttentions, CustomCausalLMOutputWithCrossAttentions
 
 logger = logging.get_logger(__name__)
 
@@ -21,10 +22,13 @@ class CustomXGLMAttention(XGLMAttention):
         attention_mask: Optional[torch.Tensor] = None,
         layer_head_mask: Optional[torch.Tensor] = None,
         output_attentions: bool = False,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        output_neurons: bool = False,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]], Optional[List[torch.Tensor]]]:
 
         is_cross_attention = key_value_states is not None
         bsz, tgt_len, _ = hidden_states.size()
+
+        attn_neurons = torch.tensor([]) if output_neurons else None
 
         query_states = self.q_proj(hidden_states) * self.scaling
         if is_cross_attention and past_key_value is not None:
@@ -44,6 +48,12 @@ class CustomXGLMAttention(XGLMAttention):
 
         if self.is_decoder:
             past_key_value = (key_states, value_states)
+
+        if output_neurons:
+            query_states_ = query_states.view(bsz, tgt_len, -1)
+            key_states_ = key_states.view(bsz, tgt_len, -1)
+            value_states_ = value_states.view(bsz, tgt_len, -1)
+            attn_neurons = torch.cat([attn_neurons, query_states_, key_states_, value_states_], dim=-1)
 
         proj_shape = (bsz * self.num_heads, -1, self.head_dim)
         query_states = self._shape(query_states, tgt_len, bsz).view(*proj_shape)
@@ -107,10 +117,22 @@ class CustomXGLMAttention(XGLMAttention):
 
         attn_output = self.out_proj(attn_output)
 
-        return attn_output, attn_weights_reshaped, past_key_value
+        if output_neurons:
+            attn_neurons = torch.cat([attn_neurons, attn_output], dim=-1)
+
+        return attn_output, attn_weights_reshaped, past_key_value, attn_neurons
 
 
 class CustomXGLMDecoderLayer(XGLMDecoderLayer):
+    def __init__(self, config):
+        super().__init__(config)
+        self.self_attn = CustomXGLMAttention(
+            embed_dim=self.embed_dim,
+            num_heads=config.attention_heads,
+            dropout=config.attention_dropout,
+            is_decoder=True,
+        )
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -121,22 +143,30 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
         cross_attn_layer_head_mask: Optional[torch.Tensor] = None,
         past_key_value: Optional[Tuple[torch.Tensor]] = None,
         output_attentions: Optional[bool] = False,
+        output_neurons: Optional[bool] = False,
         use_cache: Optional[bool] = True,
     ) -> torch.Tensor:
+
+        all_neurons = torch.tensor([]) if output_neurons else None
 
         residual = hidden_states
         hidden_states = self.self_attn_layer_norm(hidden_states)
 
         self_attn_past_key_value = past_key_value[:2] if past_key_value is not None else None
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+        hidden_states, self_attn_weights, present_key_value, attn_neurons = self.self_attn(
             hidden_states=hidden_states,
             past_key_value=self_attn_past_key_value,
             attention_mask=attention_mask,
             layer_head_mask=layer_head_mask,
             output_attentions=output_attentions,
+            output_neurons=output_neurons,
         )
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
+
+        if output_neurons:
+            # all_neurons += (attn_neurons,)
+            all_neurons = torch.cat([all_neurons, attn_neurons], dim=-1)
 
         cross_attn_present_key_value = None
         cross_attn_weights = None
@@ -161,8 +191,12 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
         residual = hidden_states
         hidden_states = self.final_layer_norm(hidden_states)
         hidden_states = self.activation_fn(self.fc1(hidden_states))
+        if output_neurons:
+            all_neurons = torch.cat([all_neurons, hidden_states], dim=-1)
         hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
         hidden_states = self.fc2(hidden_states)
+        if output_neurons:
+            all_neurons = torch.cat([all_neurons, hidden_states], dim=-1)
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
 
@@ -174,10 +208,20 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
         if use_cache:
             outputs += (present_key_value,)
 
+        if output_neurons:
+            outputs += (all_neurons,)
+
         return outputs
 
 
 class CustomXGLMModel(XGLMModel):
+    def __init__(self, config):
+        super().__init__(config)
+        self.layers = nn.ModuleList([CustomXGLMDecoderLayer(config) for _ in range(config.num_layers)])
+
+        self.gradient_checkpointing = False
+        self.post_init()
+
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
@@ -192,8 +236,9 @@ class CustomXGLMModel(XGLMModel):
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
+        output_neurons: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-    ) -> Union[Tuple[torch.Tensor], BaseModelOutputWithPastAndCrossAttentions]:
+    ) -> Union[Tuple[torch.Tensor], CustomBaseModelOutputWithPastAndCrossAttentions]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -250,6 +295,9 @@ class CustomXGLMModel(XGLMModel):
         all_cross_attentions = () if (output_attentions and encoder_hidden_states is not None) else None
         next_decoder_cache = () if use_cache else None
 
+        # neurons
+        all_neurons = () if output_neurons else None
+
         for attn_mask, mask_name in zip([head_mask, cross_attn_head_mask], ["head_mask", "cross_attn_head_mask"]):
             if attn_mask is not None:
                 if attn_mask.size()[0] != len(self.layers):
@@ -292,6 +340,7 @@ class CustomXGLMModel(XGLMModel):
                     ),
                     past_key_value=past_key_value,
                     output_attentions=output_attentions,
+                    output_neurons=output_neurons,
                     use_cache=use_cache,
                 )
             hidden_states = layer_outputs[0]
@@ -305,6 +354,12 @@ class CustomXGLMModel(XGLMModel):
                 if encoder_hidden_states is not None:
                     all_cross_attentions += (layer_outputs[2],)
 
+                if output_neurons:
+                    all_neurons += (layer_outputs[4 if use_cache else 3],)
+            else:
+                if output_neurons:
+                    all_neurons += (layer_outputs[2 if use_cache else 1],)
+
         hidden_states = self.layer_norm(hidden_states)
 
         if output_hidden_states:
@@ -317,16 +372,24 @@ class CustomXGLMModel(XGLMModel):
                 for v in [hidden_states, next_cache, all_hidden_states, all_self_attns, all_cross_attentions]
                 if v is not None
             )
-        return BaseModelOutputWithPastAndCrossAttentions(
+        return CustomBaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=hidden_states,
             past_key_values=next_cache,
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
             cross_attentions=all_cross_attentions,
+            neurons=all_neurons,
         )
 
 
 class CustomXGLMForCausalLM(XGLMForCausalLM):
+    def __init__(self, config):
+        super().__init__(config)
+        self.model = CustomXGLMModel(config)
+        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+
+        self.post_init()
+
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
@@ -342,8 +405,9 @@ class CustomXGLMForCausalLM(XGLMForCausalLM):
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
+        output_neurons: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-    ) -> Union[Tuple[torch.Tensor], CausalLMOutputWithCrossAttentions]:
+    ) -> Union[Tuple[torch.Tensor], CustomCausalLMOutputWithCrossAttentions]:
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -364,6 +428,7 @@ class CustomXGLMForCausalLM(XGLMForCausalLM):
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
+            output_neurons=output_neurons,
             return_dict=return_dict,
         )
 
@@ -382,11 +447,12 @@ class CustomXGLMForCausalLM(XGLMForCausalLM):
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
 
-        return CausalLMOutputWithCrossAttentions(
+        return CustomCausalLMOutputWithCrossAttentions(
             loss=loss,
             logits=logits,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
             cross_attentions=outputs.cross_attentions,
+            neurons=outputs.neurons,
         )
