@@ -24,7 +24,7 @@ class CustomDataset(Dataset):
             "attention_mask": self.tokenized_data["attention_mask"][index],
         }
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.tokenized_data["input_ids"])
 
     def __tokenize__(self, data: List[str]) -> Dict[str, torch.Tensor]:

@@ -13,7 +13,7 @@ def tokenizer():
 
 
 class TestCustomDataset:
-    def test_dataset(self, tokenizer):
+    def test_dataset(self, tokenizer: AutoTokenizer):
         data = self._load_data("en")
         dataset = CustomDataset(data=data, tokenizer=tokenizer, max_length=512, train_flag=True)
 
@@ -26,7 +26,7 @@ class TestCustomDataset:
             assert batch["input_ids"].shape == (512,)
             assert batch["attention_mask"].shape == (512,)
 
-    def _load_data(self, lang):
+    def _load_data(self, lang: str) -> list[str]:
         pawsx_ = load_dataset("google-research-datasets/paws-x", lang)
         pawsx = pawsx_["train"]["sentence1"] + pawsx_["test"]["sentence1"] + pawsx_["validation"]["sentence1"]
 

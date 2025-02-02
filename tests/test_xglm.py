@@ -6,22 +6,22 @@ from src.model.xglm import CustomXGLMAttention, CustomXGLMDecoderLayer, CustomXG
 
 
 @pytest.fixture
-def device():
+def device() -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 @pytest.fixture
-def dtype():
+def dtype() -> torch.dtype:
     return torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
 
 @pytest.fixture
-def config():
+def config() -> XGLMConfig:
     return XGLMConfig.from_pretrained("facebook/xglm-564M")
 
 
 class TestCustomXGLM:
-    def test_CustomXGLMAttention(self, config, device, dtype):
+    def test_CustomXGLMAttention(self, config: XGLMConfig, device: torch.device, dtype: torch.dtype):
         attention = CustomXGLMAttention(
             embed_dim=config.d_model,
             num_heads=config.attention_heads,
@@ -37,7 +37,7 @@ class TestCustomXGLM:
         assert attn_output.size() == (10, 32, config.d_model)
         assert attn_neurons.size() == (10, 32, config.d_model * 4)
 
-    def test_CustomXGLMDecoderLayer(self, config, device, dtype):
+    def test_CustomXGLMDecoderLayer(self, config: XGLMConfig, device: torch.device, dtype: torch.dtype):
         decoder_layer = CustomXGLMDecoderLayer(config).to(device=device, dtype=dtype)
 
         x = torch.randn(10, 32, config.d_model).to(device=device, dtype=dtype)
