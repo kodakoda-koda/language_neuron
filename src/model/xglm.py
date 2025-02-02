@@ -213,6 +213,7 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
             outputs += (present_key_value,)
 
         if output_neurons:
+            all_neurons = torch.mean(all_neurons, dim=1)
             outputs += (all_neurons,)
 
         return outputs

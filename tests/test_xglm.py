@@ -45,7 +45,7 @@ class TestCustomXGLM:
         outputs = decoder_layer(hidden_states=x, attention_mask=mask, output_neurons=True)
 
         assert outputs[0].size() == (10, 32, config.d_model)
-        assert outputs[2].size() == (10, 32, config.d_model * 9)
+        assert outputs[2].size() == (10, config.d_model * 9)
 
     def test_CustomXGLMModel(self, config, device, dtype):
         model = CustomXGLMModel(config).to(device=device, dtype=dtype)
@@ -56,7 +56,7 @@ class TestCustomXGLM:
 
         assert outputs.last_hidden_state.size() == (10, 32, config.d_model)
         assert len(outputs.neurons) == config.num_layers
-        assert outputs.neurons[0].size() == (10, 32, config.d_model * 9)
+        assert outputs.neurons[0].size() == (10, config.d_model * 9)
 
     def test_CustomXGLMForCausalLM(self, config, device, dtype):
         model = CustomXGLMForCausalLM(config).to(device=device, dtype=dtype)
@@ -67,4 +67,4 @@ class TestCustomXGLM:
 
         assert outputs.logits.size() == (10, 32, config.vocab_size)
         assert len(outputs.neurons) == config.num_layers
-        assert outputs.neurons[0].size() == (10, 32, config.d_model * 9)
+        assert outputs.neurons[0].size() == (10, config.d_model * 9)
