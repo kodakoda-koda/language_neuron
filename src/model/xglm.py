@@ -8,7 +8,7 @@ from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask, _p
 from transformers.models.xglm.modeling_xglm import XGLMAttention, XGLMDecoderLayer
 from transformers.utils import logging
 
-from model.outputs import CustomBaseModelOutputWithPastAndCrossAttentions, CustomCausalLMOutputWithCrossAttentions
+from src.model.outputs import CustomBaseModelOutputWithPastAndCrossAttentions, CustomCausalLMOutputWithCrossAttentions
 
 logger = logging.get_logger(__name__)
 
@@ -28,7 +28,9 @@ class CustomXGLMAttention(XGLMAttention):
         is_cross_attention = key_value_states is not None
         bsz, tgt_len, _ = hidden_states.size()
 
-        attn_neurons = torch.tensor([]) if output_neurons else None
+        device = hidden_states.device
+        dtype = hidden_states.dtype
+        attn_neurons = torch.tensor([]).to(device=device, dtype=dtype) if output_neurons else None
 
         query_states = self.q_proj(hidden_states) * self.scaling
         if is_cross_attention and past_key_value is not None:
@@ -127,7 +129,7 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
     def __init__(self, config):
         super().__init__(config)
         self.self_attn = CustomXGLMAttention(
-            embed_dim=self.embed_dim,
+            embed_dim=config.d_model,
             num_heads=config.attention_heads,
             dropout=config.attention_dropout,
             is_decoder=True,
@@ -147,7 +149,9 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
         use_cache: Optional[bool] = True,
     ) -> torch.Tensor:
 
-        all_neurons = torch.tensor([]) if output_neurons else None
+        device = hidden_states.device
+        dtype = hidden_states.dtype
+        all_neurons = torch.tensor([]).to(device=device, dtype=dtype) if output_neurons else None
 
         residual = hidden_states
         hidden_states = self.self_attn_layer_norm(hidden_states)
