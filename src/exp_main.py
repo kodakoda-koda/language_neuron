@@ -1,6 +1,6 @@
 from torch.optim import Adam
 
-from exp_base import Exp_base
+from src.exp_base import Exp_base
 
 
 class Exp_main(Exp_base):

@@ -5,7 +5,7 @@ import warnings
 import transformers
 from transformers import set_seed
 
-from exp_main import Exp_main
+from src.exp_main import Exp_main
 
 warnings.filterwarnings("ignore")
 transformers.logging.set_verbosity_error()
