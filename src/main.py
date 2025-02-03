@@ -17,11 +17,9 @@ def main():
     parser.add_argument("--seed", type=int, default=2024)
     parser.add_argument("--max_length", type=int, default=64)
     parser.add_argument("--lang", type=str, default="en")
-    parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--dtype", type=str, default="bfloat16")
+    parser.add_argument("--dtype", type=str, default="float32")
     parser.add_argument("--lm_name", type=str, default="facebook/xglm-564M")
     parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--num_epochs", type=int, default=3)
     args = parser.parse_args()
 
     # set seed
@@ -37,8 +35,7 @@ def main():
 
     # train and evaluate
     exp = Exp_main(args, logger)
-    exp.train()
-    exp.test()
+    exp.detect()
 
 
 if __name__ == "__main__":
