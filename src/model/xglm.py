@@ -213,7 +213,6 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
             outputs += (present_key_value,)
 
         if output_neurons:
-            all_neurons = torch.mean(all_neurons, dim=1)
             outputs += (all_neurons,)
 
         return outputs
@@ -301,7 +300,9 @@ class CustomXGLMModel(XGLMModel):
         next_decoder_cache = () if use_cache else None
 
         # neurons
-        all_neurons = () if output_neurons else None
+        device = hidden_states.device
+        dtype = hidden_states.dtype
+        all_neurons = torch.tensor([]).to(device=device, dtype=dtype) if output_neurons else None
 
         for attn_mask, mask_name in zip([head_mask, cross_attn_head_mask], ["head_mask", "cross_attn_head_mask"]):
             if attn_mask is not None:
@@ -360,10 +361,10 @@ class CustomXGLMModel(XGLMModel):
                     all_cross_attentions += (layer_outputs[2],)
 
                 if output_neurons:
-                    all_neurons += (layer_outputs[4 if use_cache else 3],)
+                    all_neurons = torch.cat([all_neurons, layer_outputs[4 if use_cache else 3]], dim=-1)
             else:
                 if output_neurons:
-                    all_neurons += (layer_outputs[2 if use_cache else 1],)
+                    all_neurons = torch.cat([all_neurons, layer_outputs[2 if use_cache else 1]], dim=-1)
 
         hidden_states = self.layer_norm(hidden_states)
 
@@ -447,6 +448,11 @@ class CustomXGLMForCausalLM(XGLMForCausalLM):
 
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.config.vocab_size), shift_labels.view(-1))
+
+        if output_neurons:
+            pad_token_indices = torch.where(input_ids == self.config.pad_token_id)
+            outputs.neurons[pad_token_indices[0], pad_token_indices[1], :] = torch.nan
+            outputs.neurons = torch.nanmean(outputs.neurons, dim=1)
 
         if not return_dict:
             output = (logits,) + outputs[1:]
