@@ -31,38 +31,37 @@ class Exp_base:
         return tokenizer
 
     def _get_dataloader(self, train_flag: bool) -> DataLoader:
-        assert self.args.lang in [
-            "en",
-            "de",
-            "fr",
-            "es",
-            "zh",
-            "ja",
-        ], "lang must be one of ['en', 'de', 'fr', 'es', 'zh', 'ja']"
+        lang = ["en", "de", "fr", "es", "zh", "ja"]
+        texts = []
+        labels = []
+        for i, l in enumerate(lang):
+            # load paws-x dataset
+            pawsx_ = load_dataset("google-research-datasets/paws-x", l)
+            pawsx_ = pawsx_["train"]["sentence1"] + pawsx_["test"]["sentence1"] + pawsx_["validation"]["sentence1"]
 
-        # load paws-x dataset
-        pawsx_ = load_dataset("google-research-datasets/paws-x", self.args.lang)
-        pawsx = pawsx_["train"]["sentence1"] + pawsx_["test"]["sentence1"] + pawsx_["validation"]["sentence1"]
+            # load flores-200 dataset
+            flores_lang_set = {
+                "en": "eng_Latn-jpn_Jpan",
+                "de": "deu_Latn-jpn_Jpan",
+                "fr": "fra_Latn-jpn_Jpan",
+                "es": "spa_Latn-jpn_Jpan",
+                "zh": "zho_Hans-jpn_Jpan",
+                "ja": "jpn_Jpan-eng_Latn",
+            }
+            flores_lang = flores_lang_set[l]
+            flores_ = load_dataset("facebook/flores", flores_lang)
+            flores_ = (
+                flores_["dev"][f"sentence_{flores_lang.split('-')[0]}"]
+                + flores_["devtest"][f"sentence_{flores_lang.split('-')[0]}"]
+            )
 
-        # load flores200 dataset
-        flores_lang_set = {
-            "en": "eng_Latn-jpn_Jpan",
-            "de": "deu_Latn-jpn_Jpan",
-            "fr": "fra_Latn-jpn_Jpan",
-            "es": "spa_Latn-jpn_Jpan",
-            "zh": "zho_Hans-jpn_Jpan",
-            "ja": "jpn_Jpan-eng_Latn",
-        }
-        flores_lang = flores_lang_set[self.args.lang]
-        flores_ = load_dataset("facebook/flores", flores_lang)
-        flores = (
-            flores_["dev"][f"sentence_{flores_lang.split('-')[0]}"]
-            + flores_["devtest"][f"sentence_{flores_lang.split('-')[0]}"]
-        )
+            # sample 250 data from each dataset
+            texts_ = random.sample(pawsx_, 250) + random.sample(flores_, 250)
+            labels_ = [[int(j == i) for j in range(len(lang))] for _ in range(500)]
 
-        # sample 250 data from each dataset
-        data = random.sample(pawsx, 250) + random.sample(flores, 250)
+            texts.extend(texts_)
+            labels.extend(labels_)
 
-        dataset = CustomDataset(data, self.tokenizer, self.args.max_length, train_flag)
+        dataset = CustomDataset(texts, labels, self.tokenizer, self.args.max_length, train_flag)
         dataloader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=train_flag)
         return dataloader

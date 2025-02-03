@@ -8,20 +8,23 @@ from transformers import PreTrainedTokenizer
 class CustomDataset(Dataset):
     def __init__(
         self,
-        data: List[str],
+        texts: List[str],
+        labels: List[List[int]],
         tokenizer: PreTrainedTokenizer,
         max_length: int = 512,
         train_flag: bool = True,
     ):
+        self.labels = torch.tensor(labels)
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.train_flag = train_flag
-        self.tokenized_data = self.__tokenize__(data)
+        self.tokenized_data = self.__tokenize__(texts)
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
         return {
             "input_ids": self.tokenized_data["input_ids"][index],
             "attention_mask": self.tokenized_data["attention_mask"][index],
+            "labels": self.labels[index],
         }
 
     def __len__(self) -> int:
