@@ -31,11 +31,6 @@ class CustomDataset(Dataset):
         return len(self.tokenized_data["input_ids"])
 
     def __tokenize__(self, data: List[str]) -> Dict[str, torch.Tensor]:
-        if self.train_flag:
-            data = data[: int(len(data) * 0.8)]
-        else:
-            data = data[int(len(data) * 0.8) :]
-
         tokenized_data = self.tokenizer.batch_encode_plus(
             data,
             max_length=self.max_length,

@@ -1,3 +1,5 @@
+from typing import Dict
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -8,35 +10,31 @@ def min_max_scaler(data: np.ndarray) -> np.ndarray:
     return (data - min_) / (max_ - min_ + 1e-10)
 
 
-def average_precision(y_true: np.ndarray, y_pred: np.ndarray):
-    y_true = y_true.astype(np.int32)
-    y_pred = y_pred.astype(np.float32)
-    y_true_sorted = y_true[np.argsort(y_pred)[::-1]]
-    # n = len(y_true)
+def average_precision_(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
+    y_true_sorted = y_true[np.argsort(y_pred, axis=0)[::-1]]
+
+    cumulative_TP = np.cumsum(y_true_sorted, axis=0)
+    cumulative_FP = np.cumsum(1 - y_true_sorted, axis=0)
+
     n_positive = np.sum(y_true)
-    # n_negative = n - n_positive
-    cumulative_TP = np.cumsum(y_true_sorted)
-    cumulative_FP = np.cumsum(1 - y_true_sorted)
     precision = cumulative_TP / (cumulative_TP + cumulative_FP)
     recall = cumulative_TP / n_positive
-    recall = np.concatenate([[0], recall, [1]])
-    precision = np.concatenate([[0], precision, [0]])
-    return np.sum((recall[1:] - recall[:-1]) * precision[:-1])
+
+    precision = np.concatenate([np.zeros((y_true.shape[0], 1)), precision, np.zeros((y_true.shape[0], 1))], axis=1)
+    recall = np.concatenate([np.zeros((y_true.shape[0], 1)), recall, np.ones((y_true.shape[0], 1))], axis=1)
+    return np.sum((recall[1:] - recall[:-1]) * precision[:-1], axis=0)
 
 
-def compute_score(neurons, labels):
+def compute_score(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, np.ndarray]:
     neurons = min_max_scaler(neurons)
     scores = {}
     lang = ["en", "de", "fr", "es", "zh", "ja"]
     for i, l in enumerate(lang):
-        scores_l = []
-        for j in range(neurons.shape[1]):
-            scores_l.append(average_precision(labels[:, i], neurons[:, j]))
-        scores[l] = scores_l
+        scores[l] = average_precision_(labels[:, i], neurons)
     return scores
 
 
-def plot_scores(scores):
+def plot_scores(scores: Dict[str, np.ndarray]) -> None:
     lang = ["en", "de", "fr", "es", "zh", "ja"]
     for i, l in enumerate(lang):
         top_1000 = np.argsort(scores[l])[::-1][:1000]
