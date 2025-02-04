@@ -15,8 +15,6 @@ def main():
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=2024)
-    parser.add_argument("--max_length", type=int, default=64)
-    parser.add_argument("--lang", type=str, default="en")
     parser.add_argument("--dtype", type=str, default="float32")
     parser.add_argument("--lm_name", type=str, default="facebook/xglm-564M")
     parser.add_argument("--batch_size", type=int, default=4)

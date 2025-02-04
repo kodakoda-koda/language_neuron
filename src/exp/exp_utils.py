@@ -17,7 +17,6 @@ def average_precision(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
     cumulative_TP = np.cumsum(y_true_sorted, axis=0)
     cumulative_FP = np.cumsum(1 - y_true_sorted, axis=0)
 
-    # recall = cumulative_TP / np.sum(y_true)
     precision = cumulative_TP / (cumulative_TP + cumulative_FP)
 
     return np.sum(precision * y_true_sorted, axis=0) / np.sum(y_true)
@@ -41,7 +40,7 @@ def compute_ap(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, Dict[str, n
     return scores
 
 
-def plot_scores(scores: Dict[str, Dict[str, np.ndarray]]) -> None:
+def plot_scores(scores: Dict[str, Dict[str, np.ndarray]], num_layers: int) -> None:
     lang = ["en", "de", "fr", "es", "zh", "ja"]
     for i, l in enumerate(lang):
         top = scores[l]["top"]
@@ -51,14 +50,14 @@ def plot_scores(scores: Dict[str, Dict[str, np.ndarray]]) -> None:
         plt.figure(figsize=(15, 5))
         for j, idx in enumerate([top, middle, bottom]):
             plt.subplot(1, 3, j + 1)
-            plt.hist(idx, bins=24)
-            plt.xticks(np.arange(0, 24, 1))
+            plt.hist(idx, bins=num_layers)
+            plt.xticks(np.arange(num_layers), np.arange(1, num_layers + 1))
             plt.title(["top", "middle", "bottom"][j])
         plt.suptitle(l)
         plt.savefig(f"./tmp/{l}.png")
         plt.close()
 
-    corr = np.zeros((6, 6))
+    corr = np.zeros((len(lang), len(lang)))
     for i, l1 in enumerate(lang):
         for j, l2 in enumerate(lang):
             l1_top_bottom = set(scores[l1]["top"]).union(set(scores[l1]["bottom"]))
@@ -66,7 +65,7 @@ def plot_scores(scores: Dict[str, Dict[str, np.ndarray]]) -> None:
             corr[i, j] = len(l1_top_bottom.intersection(l2_top_bottom))
 
     sns.heatmap(corr, annot=True)
-    plt.xticks(np.arange(6), lang)
-    plt.yticks(np.arange(6), lang)
+    plt.xticks(np.arange(len(lang)), lang)
+    plt.yticks(np.arange(len(lang)), lang)
     plt.savefig("./tmp/corr.png")
     plt.close()

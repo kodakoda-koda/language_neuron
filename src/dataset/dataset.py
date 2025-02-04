@@ -1,6 +1,8 @@
-from typing import Dict, List
+import random
+from typing import Dict, List, Tuple
 
 import torch
+from datasets import load_dataset
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 
@@ -11,13 +13,9 @@ class CustomDataset(Dataset):
         texts: List[str],
         labels: List[List[int]],
         tokenizer: PreTrainedTokenizer,
-        max_length: int = 512,
-        train_flag: bool = True,
     ):
         self.labels = torch.tensor(labels)
         self.tokenizer = tokenizer
-        self.max_length = max_length
-        self.train_flag = train_flag
         self.tokenized_data = self.__tokenize__(texts)
 
     def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
@@ -33,8 +31,7 @@ class CustomDataset(Dataset):
     def __tokenize__(self, data: List[str]) -> Dict[str, torch.Tensor]:
         tokenized_data = self.tokenizer.batch_encode_plus(
             data,
-            max_length=self.max_length,
-            padding="max_length",
+            padding=True,
             truncation=True,
             return_tensors="pt",
         )

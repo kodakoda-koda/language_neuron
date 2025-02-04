@@ -5,7 +5,7 @@ import random
 import torch
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
+from transformers import AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
 from src.dataset.dataset import CustomDataset
 from src.model.xglm import CustomXGLMForCausalLM
@@ -62,6 +62,6 @@ class Exp_base:
             texts.extend(texts_)
             labels.extend(labels_)
 
-        dataset = CustomDataset(texts, labels, self.tokenizer, self.args.max_length, train_flag)
+        dataset = CustomDataset(texts, labels, self.tokenizer)
         dataloader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=train_flag)
         return dataloader

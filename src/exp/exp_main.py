@@ -29,4 +29,4 @@ class Exp_main(Exp_base):
         score = compute_ap(all_neurons, all_labels)
 
         self.logger.info("Plotting scores")
-        plot_scores(score)
+        plot_scores(score, self.model.config.num_layers)
