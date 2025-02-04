@@ -2,7 +2,7 @@ import numpy as np
 from torch.optim import Adam
 
 from src.exp.exp_base import Exp_base
-from src.exp.exp_utils import compute_score, plot_scores
+from src.exp.exp_utils import compute_ap, plot_scores
 
 
 class Exp_main(Exp_base):
@@ -26,7 +26,7 @@ class Exp_main(Exp_base):
         all_labels = np.concatenate(all_labels, axis=0)
 
         self.logger.info("Start computing scores")
-        score = compute_score(all_neurons, all_labels)
+        score = compute_ap(all_neurons, all_labels)
 
         self.logger.info("Plotting scores")
         plot_scores(score)

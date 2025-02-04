@@ -2,6 +2,7 @@ from typing import Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 
 def min_max_scaler(data: np.ndarray) -> np.ndarray:
@@ -10,46 +11,62 @@ def min_max_scaler(data: np.ndarray) -> np.ndarray:
     return (data - min_) / (max_ - min_ + 1e-10)
 
 
-def average_precision_(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
+def average_precision(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
     y_true_sorted = y_true[np.argsort(y_pred, axis=0)[::-1]]
 
     cumulative_TP = np.cumsum(y_true_sorted, axis=0)
     cumulative_FP = np.cumsum(1 - y_true_sorted, axis=0)
 
-    n_positive = np.sum(y_true)
+    # recall = cumulative_TP / np.sum(y_true)
     precision = cumulative_TP / (cumulative_TP + cumulative_FP)
-    recall = cumulative_TP / n_positive
 
-    precision = np.concatenate([np.zeros((y_true.shape[0], 1)), precision, np.zeros((y_true.shape[0], 1))], axis=1)
-    recall = np.concatenate([np.zeros((y_true.shape[0], 1)), recall, np.ones((y_true.shape[0], 1))], axis=1)
-    return np.sum((recall[1:] - recall[:-1]) * precision[:-1], axis=0)
+    return np.sum(precision * y_true_sorted, axis=0) / np.sum(y_true)
 
 
-def compute_score(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, np.ndarray]:
+def compute_ap(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, Dict[str, np.ndarray]]:
     neurons = min_max_scaler(neurons)
     scores = {}
     lang = ["en", "de", "fr", "es", "zh", "ja"]
     for i, l in enumerate(lang):
-        scores[l] = average_precision_(labels[:, i], neurons)
+        ap = average_precision(labels[:, i], neurons)
+        top_1000 = np.argsort(ap)[::-1][:1000]
+        middle_1000 = np.argsort(ap)[::-1][len(ap) // 2 - 500 : len(ap) // 2 + 500]
+        bottom_1000 = np.argsort(ap)[:1000]
+        scores[l] = {
+            "ap": ap,
+            "top": top_1000,
+            "middle": middle_1000,
+            "bottom": bottom_1000,
+        }
     return scores
 
 
-def plot_scores(scores: Dict[str, np.ndarray]) -> None:
+def plot_scores(scores: Dict[str, Dict[str, np.ndarray]]) -> None:
     lang = ["en", "de", "fr", "es", "zh", "ja"]
     for i, l in enumerate(lang):
-        top_1000 = np.argsort(scores[l])[::-1][:1000]
-        middle_1000 = np.argsort(scores[l])[::-1][len(scores[l]) // 2 - 500 : len(scores[l]) // 2 + 500]
-        bottom_1000 = np.argsort(scores[l])[:1000]
+        top = scores[l]["top"]
+        middle = scores[l]["middle"]
+        bottom = scores[l]["bottom"]
 
         plt.figure(figsize=(15, 5))
-        plt.subplot(1, 3, 1)
-        plt.hist(top_1000, bins=24)
-        plt.title(f"{l} top 1000 scores")
-        plt.subplot(1, 3, 2)
-        plt.hist(middle_1000, bins=24)
-        plt.title(f"{l} middle 1000 scores")
-        plt.subplot(1, 3, 3)
-        plt.hist(bottom_1000, bins=24)
-        plt.title(f"{l} bottom 1000 scores")
+        for j, idx in enumerate([top, middle, bottom]):
+            plt.subplot(1, 3, j + 1)
+            plt.hist(idx, bins=24)
+            plt.xticks(np.arange(0, 24, 1))
+            plt.title(["top", "middle", "bottom"][j])
+        plt.suptitle(l)
         plt.savefig(f"./tmp/{l}.png")
         plt.close()
+
+    corr = np.zeros((6, 6))
+    for i, l1 in enumerate(lang):
+        for j, l2 in enumerate(lang):
+            l1_top_bottom = set(scores[l1]["top"]).union(set(scores[l1]["bottom"]))
+            l2_top_bottom = set(scores[l2]["top"]).union(set(scores[l2]["bottom"]))
+            corr[i, j] = len(l1_top_bottom.intersection(l2_top_bottom))
+
+    sns.heatmap(corr, annot=True)
+    plt.xticks(np.arange(6), lang)
+    plt.yticks(np.arange(6), lang)
+    plt.savefig("./tmp/corr.png")
+    plt.close()
