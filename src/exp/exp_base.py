@@ -7,7 +7,7 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
-from src.dataset import CustomDataset
+from src.dataset.dataset import CustomDataset
 from src.model.xglm import CustomXGLMForCausalLM
 
 

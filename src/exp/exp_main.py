@@ -1,8 +1,8 @@
 import numpy as np
 from torch.optim import Adam
 
-from src.exp_base import Exp_base
-from src.utils import compute_score, plot_scores
+from src.exp.exp_base import Exp_base
+from src.exp.exp_utils import compute_score, plot_scores
 
 
 class Exp_main(Exp_base):
