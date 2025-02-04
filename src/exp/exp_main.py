@@ -1,8 +1,11 @@
+import json
+import os
+
 import numpy as np
 from torch.optim import Adam
 
 from src.exp.exp_base import Exp_base
-from src.exp.exp_utils import compute_ap, plot_scores
+from src.exp.exp_utils import compute_ap, plot_indices
 
 
 class Exp_main(Exp_base):
@@ -26,7 +29,14 @@ class Exp_main(Exp_base):
         all_labels = np.concatenate(all_labels, axis=0)
 
         self.logger.info("Start computing scores")
-        score = compute_ap(all_neurons, all_labels)
+        indices = compute_ap(all_neurons, all_labels)
 
-        self.logger.info("Plotting scores")
-        plot_scores(score, self.model.config.num_layers)
+        self.logger.info("Saving outputs")
+        if not os.path.exists(self.args.output_path):
+            os.makedirs(self.args.output_path)
+        np.save(self.args.output_path + "/neurons.npy", all_neurons)
+        json.dump(indices, open(self.args.output_path + "/indices.json", "w"))
+
+        if self.args.plot:
+            self.logger.info("Plotting Top-Bottom Indices")
+            plot_indices(indices, self.model.config.num_layers, self.args.plot_path)

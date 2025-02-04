@@ -15,9 +15,12 @@ def main():
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=2024)
+    parser.add_argument("--output_path", type=str, default="./outputs")
+    parser.add_argument("--plot_path", type=str, default="./plots")
     parser.add_argument("--dtype", type=str, default="float32")
     parser.add_argument("--lm_name", type=str, default="facebook/xglm-564M")
     parser.add_argument("--batch_size", type=int, default=4)
+    parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
 
     # set seed

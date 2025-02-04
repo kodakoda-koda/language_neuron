@@ -1,3 +1,4 @@
+import os
 from typing import Dict
 
 import matplotlib.pyplot as plt
@@ -24,28 +25,30 @@ def average_precision(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
 
 def compute_ap(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, Dict[str, np.ndarray]]:
     neurons = min_max_scaler(neurons)
-    scores = {}
+    indices = {}
     lang = ["en", "de", "fr", "es", "zh", "ja"]
     for i, l in enumerate(lang):
         ap = average_precision(labels[:, i], neurons)
         top_1000 = np.argsort(ap)[::-1][:1000]
         middle_1000 = np.argsort(ap)[::-1][len(ap) // 2 - 500 : len(ap) // 2 + 500]
         bottom_1000 = np.argsort(ap)[:1000]
-        scores[l] = {
-            "ap": ap,
-            "top": top_1000,
-            "middle": middle_1000,
-            "bottom": bottom_1000,
+        indices[l] = {
+            "top": top_1000.tolist(),
+            "middle": middle_1000.tolist(),
+            "bottom": bottom_1000.tolist(),
         }
-    return scores
+    return indices
 
 
-def plot_scores(scores: Dict[str, Dict[str, np.ndarray]], num_layers: int) -> None:
+def plot_indices(indices: Dict[str, Dict[str, np.ndarray]], num_layers: int, plot_path: str) -> None:
+    if not os.path.exists(plot_path):
+        os.makedirs(plot_path)
+
     lang = ["en", "de", "fr", "es", "zh", "ja"]
     for i, l in enumerate(lang):
-        top = scores[l]["top"]
-        middle = scores[l]["middle"]
-        bottom = scores[l]["bottom"]
+        top = indices[l]["top"]
+        middle = indices[l]["middle"]
+        bottom = indices[l]["bottom"]
 
         plt.figure(figsize=(15, 5))
         for j, idx in enumerate([top, middle, bottom]):
@@ -54,18 +57,18 @@ def plot_scores(scores: Dict[str, Dict[str, np.ndarray]], num_layers: int) -> No
             plt.xticks(np.arange(num_layers), np.arange(1, num_layers + 1))
             plt.title(["top", "middle", "bottom"][j])
         plt.suptitle(l)
-        plt.savefig(f"./tmp/{l}.png")
+        plt.savefig(plot_path + f"/{l}.png")
         plt.close()
 
     corr = np.zeros((len(lang), len(lang)))
     for i, l1 in enumerate(lang):
         for j, l2 in enumerate(lang):
-            l1_top_bottom = set(scores[l1]["top"]).union(set(scores[l1]["bottom"]))
-            l2_top_bottom = set(scores[l2]["top"]).union(set(scores[l2]["bottom"]))
+            l1_top_bottom = set(indices[l1]["top"]).union(set(indices[l1]["bottom"]))
+            l2_top_bottom = set(indices[l2]["top"]).union(set(indices[l2]["bottom"]))
             corr[i, j] = len(l1_top_bottom.intersection(l2_top_bottom))
 
     sns.heatmap(corr, annot=True)
     plt.xticks(np.arange(len(lang)), lang)
     plt.yticks(np.arange(len(lang)), lang)
-    plt.savefig("./tmp/corr.png")
+    plt.savefig(plot_path + "/heatmap.png")
     plt.close()
