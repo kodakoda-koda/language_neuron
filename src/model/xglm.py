@@ -371,6 +371,11 @@ class CustomXGLMModel(XGLMModel):
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
 
+        if output_neurons:
+            pad_token_indices = torch.where(input_ids == self.config.pad_token_id)
+            all_neurons[pad_token_indices[0], pad_token_indices[1], :] = torch.nan
+            all_neurons = torch.nanmean(all_neurons, dim=1)
+
         next_cache = next_decoder_cache if use_cache else None
         if not return_dict:
             return tuple(
@@ -448,11 +453,6 @@ class CustomXGLMForCausalLM(XGLMForCausalLM):
 
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.config.vocab_size), shift_labels.view(-1))
-
-        if output_neurons:
-            pad_token_indices = torch.where(input_ids == self.config.pad_token_id)
-            outputs.neurons[pad_token_indices[0], pad_token_indices[1], :] = torch.nan
-            outputs.neurons = torch.nanmean(outputs.neurons, dim=1)
 
         if not return_dict:
             output = (logits,) + outputs[1:]

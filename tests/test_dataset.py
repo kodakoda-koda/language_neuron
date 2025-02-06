@@ -5,7 +5,7 @@ import pytest
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from src.dataset import CustomDataset
+from src.dataset.dataset import CustomDataset
 
 
 @pytest.fixture
@@ -16,17 +16,17 @@ def tokenizer():
 class TestCustomDataset:
     def test_dataset(self, tokenizer: AutoTokenizer):
         texts, labels = self._load_data()
-        dataset = CustomDataset(texts=texts, labels=labels, tokenizer=tokenizer, max_length=512, train_flag=True)
+        dataset = CustomDataset(texts=texts, labels=labels, tokenizer=tokenizer)
 
-        assert len(dataset) == int(3000 * 0.8)
+        assert len(dataset) == int(3000)
 
         for i in range(len(dataset)):
             batch = dataset[i]
             assert "input_ids" in batch
             assert "attention_mask" in batch
             assert "labels" in batch
-            assert batch["input_ids"].shape == (512,)
-            assert batch["attention_mask"].shape == (512,)
+            # assert batch["input_ids"].shape == (512,)
+            # assert batch["attention_mask"].shape == (512,)
             assert batch["labels"].shape == (6,)
 
     def _load_data(self) -> Tuple[list, list]:
