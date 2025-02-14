@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import warnings
 
 import transformers
@@ -36,7 +37,10 @@ def main():
 
     # train and evaluate
     exp = Exp_main(args, logger)
-    exp.detect()
+
+    if not os.path.exists(args.output_path + "/neurons.npy"):
+        exp.detect()
+    exp.intervention()
 
 
 if __name__ == "__main__":

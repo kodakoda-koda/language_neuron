@@ -30,7 +30,7 @@ class Exp_base:
         tokenizer = AutoTokenizer.from_pretrained(self.args.lm_name)
         return tokenizer
 
-    def _get_dataloader(self, train_flag: bool) -> DataLoader:
+    def get_dataloader(self) -> DataLoader:
         lang = ["en", "de", "fr", "es", "zh", "ja"]
         texts = []
         labels = []
@@ -63,5 +63,5 @@ class Exp_base:
             labels.extend(labels_)
 
         dataset = CustomDataset(texts, labels, self.tokenizer)
-        dataloader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=train_flag)
+        dataloader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=True)
         return dataloader

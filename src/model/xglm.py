@@ -23,6 +23,9 @@ class CustomXGLMAttention(XGLMAttention):
         layer_head_mask: Optional[torch.Tensor] = None,
         output_attentions: bool = False,
         output_neurons: bool = False,
+        fixed_neurons: Optional[torch.Tensor] = None,
+        neuron_indices: Optional[List[List[int]]] = None,
+        hidden_indices: Optional[List[List[int]]] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]], Optional[List[torch.Tensor]]]:
 
         is_cross_attention = key_value_states is not None
@@ -45,8 +48,8 @@ class CustomXGLMAttention(XGLMAttention):
             key_states = torch.cat([past_key_value[0], key_states], dim=2)
             value_states = torch.cat([past_key_value[1], value_states], dim=2)
         else:
-            key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
-            value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
+            key_states = self._shape(self.k_proj(hidden_states), -1, bsz)  # (bsz, tgt_len, num_heads, head_dim)
+            value_states = self._shape(self.v_proj(hidden_states), -1, bsz)  # (bsz, tgt_len, num_heads, head_dim)
 
         if self.is_decoder:
             past_key_value = (key_states, value_states)
@@ -56,6 +59,21 @@ class CustomXGLMAttention(XGLMAttention):
             key_states_ = key_states.view(bsz, tgt_len, -1)
             value_states_ = value_states.view(bsz, tgt_len, -1)
             attn_neurons = torch.cat([attn_neurons, query_states_, key_states_, value_states_], dim=-1)
+
+        if fixed_neurons is not None and neuron_indices is not None and hidden_indices is not None:
+            for i, j in zip(neuron_indices[0], hidden_indices[0]):
+                query_states[:, :, j] = fixed_neurons[i]
+
+            # ToDo: Fix this
+            # key_states = key_states.view(bsz, tgt_len, -1)
+            # for i, j in zip(neuron_indices[1], hidden_indices[1]):
+            #     key_states[:, :, j] = fixed_neurons[i]
+            # key_states = self._shape(key_states, -1, bsz)
+
+            # value_states = value_states.view(bsz, tgt_len, -1)
+            # for i, j in zip(neuron_indices[2], hidden_indices[2]):
+            #     value_states[:, :, j] = fixed_neurons[i]
+            # value_states = self._shape(value_states, -1, bsz)
 
         proj_shape = (bsz * self.num_heads, -1, self.head_dim)
         query_states = self._shape(query_states, tgt_len, bsz).view(*proj_shape)
@@ -122,6 +140,10 @@ class CustomXGLMAttention(XGLMAttention):
         if output_neurons:
             attn_neurons = torch.cat([attn_neurons, attn_output], dim=-1)
 
+        if fixed_neurons is not None and neuron_indices is not None and hidden_indices is not None:
+            for i, j in zip(neuron_indices[3], hidden_indices[3]):
+                attn_output[:, :, j] = fixed_neurons[i]
+
         return attn_output, attn_weights_reshaped, past_key_value, attn_neurons
 
 
@@ -147,6 +169,9 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
         output_attentions: Optional[bool] = False,
         output_neurons: Optional[bool] = False,
         use_cache: Optional[bool] = True,
+        fixed_neurons: Optional[torch.Tensor] = None,
+        neuron_indices: Optional[List[List[int]]] = None,
+        hidden_indices: Optional[List[List[int]]] = None,
     ) -> torch.Tensor:
 
         device = hidden_states.device
@@ -164,12 +189,14 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
             layer_head_mask=layer_head_mask,
             output_attentions=output_attentions,
             output_neurons=output_neurons,
+            fixed_neurons=fixed_neurons,
+            neuron_indices=neuron_indices[:4] if neuron_indices is not None else None,
+            hidden_indices=hidden_indices[:4] if hidden_indices is not None else None,
         )
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
 
         if output_neurons:
-            # all_neurons += (attn_neurons,)
             all_neurons = torch.cat([all_neurons, attn_neurons], dim=-1)
 
         cross_attn_present_key_value = None
@@ -195,12 +222,24 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
         residual = hidden_states
         hidden_states = self.final_layer_norm(hidden_states)
         hidden_states = self.activation_fn(self.fc1(hidden_states))
+
         if output_neurons:
             all_neurons = torch.cat([all_neurons, hidden_states], dim=-1)
+
+        if neuron_indices is not None and fixed_neurons is not None and hidden_indices is not None:
+            for i, j in zip(neuron_indices[4], hidden_indices[4]):
+                hidden_states[:, :, j] = fixed_neurons[i]
+
         hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
         hidden_states = self.fc2(hidden_states)
+
         if output_neurons:
             all_neurons = torch.cat([all_neurons, hidden_states], dim=-1)
+
+        if neuron_indices is not None and fixed_neurons is not None and hidden_indices is not None:
+            for i, j in zip(neuron_indices[5], hidden_indices[5]):
+                hidden_states[:, :, j] = fixed_neurons[i]
+
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
 
@@ -242,6 +281,9 @@ class CustomXGLMModel(XGLMModel):
         output_hidden_states: Optional[bool] = None,
         output_neurons: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        fixed_neurons: Optional[torch.Tensor] = None,
+        neuron_indices: Optional[List[List[int]]] = None,
+        hidden_indices: Optional[List[List[int]]] = None,
     ) -> Union[Tuple[torch.Tensor], CustomBaseModelOutputWithPastAndCrossAttentions]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -348,6 +390,9 @@ class CustomXGLMModel(XGLMModel):
                     output_attentions=output_attentions,
                     output_neurons=output_neurons,
                     use_cache=use_cache,
+                    fixed_neurons=fixed_neurons,
+                    neuron_indices=neuron_indices[idx] if neuron_indices is not None else None,
+                    hidden_indices=hidden_indices[idx] if hidden_indices is not None else None,
                 )
             hidden_states = layer_outputs[0]
 
@@ -418,6 +463,9 @@ class CustomXGLMForCausalLM(XGLMForCausalLM):
         output_hidden_states: Optional[bool] = None,
         output_neurons: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        fixed_neurons: Optional[torch.Tensor] = None,
+        neuron_indices: Optional[List[List[int]]] = None,
+        hidden_indices: Optional[List[List[int]]] = None,
     ) -> Union[Tuple[torch.Tensor], CustomCausalLMOutputWithCrossAttentions]:
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
@@ -441,6 +489,9 @@ class CustomXGLMForCausalLM(XGLMForCausalLM):
             output_hidden_states=output_hidden_states,
             output_neurons=output_neurons,
             return_dict=return_dict,
+            fixed_neurons=fixed_neurons,
+            neuron_indices=neuron_indices,
+            hidden_indices=hidden_indices,
         )
 
         logits = self.lm_head(outputs[0])
