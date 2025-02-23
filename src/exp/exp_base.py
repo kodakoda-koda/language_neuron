@@ -22,8 +22,8 @@ class Exp_base:
         self.tokenizer = self._bulid_tokenizer()
 
     def _build_model(self) -> PreTrainedModel:
-        model = CustomXGLMForCausalLM.from_pretrained(self.args.lm_name)
-        model = model.to(self.device).to(self.dtype)
+        model = CustomXGLMForCausalLM.from_pretrained(self.args.lm_name, torch_dtype=self.dtype)
+        model = model.to(self.device)
         return model
 
     def _bulid_tokenizer(self) -> PreTrainedTokenizer:
