@@ -11,10 +11,11 @@ from src.exp.exp_utils import compute_ap, intervention_indices, plot_indices
 class Exp_main(Exp_base):
     def detect(self):
         train_dataloader = self.get_dataloader()
+        self.logger.info("Start detecting neurons")
         self.model.eval()
+
         all_neurons = []
         all_labels = []
-        self.logger.info("Start detecting neurons")
         for i, batch in enumerate(train_dataloader):
             input_ids = batch["input_ids"].to(self.device)
             attention_mask = batch["attention_mask"].to(self.device)
@@ -32,27 +33,28 @@ class Exp_main(Exp_base):
         indices = compute_ap(all_neurons, all_labels)
 
         self.logger.info("Saving outputs")
-        if not os.path.exists(self.args.output_path):
-            os.makedirs(self.args.output_path)
-        np.save(self.args.output_path + "/neurons.npy", all_neurons)
-        np.save(self.args.output_path + "/labels.npy", all_labels)
-        json.dump(indices, open(self.args.output_path + "/indices.json", "w"))
+        if not os.path.exists(os.path.join(self.args.output_path, self.args.lm_name)):
+            os.makedirs(os.path.join(self.args.output_path, self.args.lm_name))
+        np.save(os.path.join(self.args.output_path, self.args.lm_name, "neurons.npy"), all_neurons)
+        np.save(os.path.join(self.args.output_path, self.args.lm_name, "labels.npy"), all_labels)
+        json.dump(indices, open(os.path.join(self.args.output_path, self.args.lm_name, "indices.json"), "w"))
 
         if self.args.plot:
             self.logger.info("Plotting Top-Bottom Indices")
-            plot_indices(indices, self.model.config.num_layers, self.args.plot_path)
+            plot_indices(indices, self.model.config.num_layers, self.args.plot_path, self.args.lm_name)
 
     def inference(self):
         self.logger.info("Start intervention")
+        self.model.eval()
 
         lang = ["en", "de", "fr", "es", "zh", "ja"]
         texts = {}
         for i, l in enumerate(lang):
             self.logger.info(f"Intervention for {l}")
 
-            neurons = np.load(os.path.join(self.args.output_path, "neurons.npy"))
-            labels = np.load(os.path.join(self.args.output_path, "labels.npy"))[:, i]
-            indices = json.load(open(os.path.join(self.args.output_path, "indices.json"), "r"))
+            neurons = np.load(os.path.join(self.args.output_path, self.args.lm_name, "neurons.npy"))
+            labels = np.load(os.path.join(self.args.output_path, self.args.lm_name, "labels.npy"))[:, i]
+            indices = json.load(open(os.path.join(self.args.output_path, self.args.lm_name, "indices.json"), "r"))
 
             top_bottom_indices = sorted(indices[l]["top"] + indices[l]["bottom"])
             top_bottom_neurons = neurons[labels == 1][:, top_bottom_indices]
@@ -78,4 +80,4 @@ class Exp_main(Exp_base):
 
             texts[l] = texts_
 
-        json.dump(texts, open(self.args.output_path + "/generated_texts.json", "w"))
+        json.dump(texts, open(os.path.join(self.args.output_path, self.args.lm_name, "texts.json"), "w"))

@@ -40,7 +40,7 @@ def compute_ap(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, Dict[str, n
     return indices
 
 
-def plot_indices(indices: Dict[str, Dict[str, np.ndarray]], num_layers: int, plot_path: str) -> None:
+def plot_indices(indices: Dict[str, Dict[str, np.ndarray]], num_layers: int, plot_path: str, lm_name: str) -> None:
     if not os.path.exists(plot_path):
         os.makedirs(plot_path)
 
@@ -57,7 +57,7 @@ def plot_indices(indices: Dict[str, Dict[str, np.ndarray]], num_layers: int, plo
             plt.xticks(np.arange(num_layers), np.arange(1, num_layers + 1))
             plt.title(["top", "middle", "bottom"][j])
         plt.suptitle(l)
-        plt.savefig(plot_path + f"/{l}.png")
+        plt.savefig(os.path.join(plot_path, lm_name, f"{l}.png"))
         plt.close()
 
     corr = np.zeros((len(lang), len(lang)))
@@ -70,7 +70,7 @@ def plot_indices(indices: Dict[str, Dict[str, np.ndarray]], num_layers: int, plo
     sns.heatmap(corr, annot=True)
     plt.xticks(np.arange(len(lang)), lang)
     plt.yticks(np.arange(len(lang)), lang)
-    plt.savefig(plot_path + "/heatmap.png")
+    plt.savefig(os.path.join(plot_path, lm_name, "heatmap.png"))
     plt.close()
 
 

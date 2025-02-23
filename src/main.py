@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--output_path", type=str, default="./outputs")
     parser.add_argument("--plot_path", type=str, default="./plots")
     parser.add_argument("--dtype", type=str, default="float32")
-    parser.add_argument("--lm_name", type=str, default="facebook/xglm-564M")
+    parser.add_argument("--lm_name", type=str, default="facebook/xglm-1.7B")
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--plot", action="store_true")
     parser.add_argument("--num_samples", type=int, default=100)
@@ -39,7 +39,7 @@ def main():
     # train and evaluate
     exp = Exp_main(args, logger)
 
-    if not os.path.exists(args.output_path + "/neurons.npy"):
+    if not os.path.exists(args.output_path + f"/{args.lm_name}/neurons.npy"):
         exp.detect()
     exp.inference()
 
