@@ -23,8 +23,8 @@ class Exp_main(Exp_base):
 
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, output_neurons=True)
             neurons = outputs.neurons
-            all_neurons.append(neurons.cpu().detach().numpy())
-            all_labels.append(labels.cpu().detach().numpy())
+            all_neurons.append(neurons.float().cpu().detach().numpy())
+            all_labels.append(labels.float().cpu().detach().numpy())
 
         all_neurons = np.concatenate(all_neurons, axis=0)
         all_labels = np.concatenate(all_labels, axis=0)
@@ -59,6 +59,7 @@ class Exp_main(Exp_base):
             top_bottom_indices = sorted(indices[l]["top"] + indices[l]["bottom"])
             top_bottom_neurons = neurons[labels == 1][:, top_bottom_indices]
             fixed_neurons = np.median(top_bottom_neurons, axis=0)
+            fixed_neurons = torch.tensor(fixed_neurons).to(device=self.device, dtype=self.dtype)
 
             num_layers = self.model.config.num_layers
             d_model = self.model.config.d_model
