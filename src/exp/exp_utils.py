@@ -72,3 +72,45 @@ def plot_indices(indices: Dict[str, Dict[str, np.ndarray]], num_layers: int, plo
     plt.yticks(np.arange(len(lang)), lang)
     plt.savefig(plot_path + "/heatmap.png")
     plt.close()
+
+
+def intervention_indices(num_layers, d_model, top_bottom_indices):
+    neuron_indices = []
+    hidden_indices = []
+
+    range_ = np.arange(num_layers * d_model * 9).reshape(num_layers, d_model * 9)
+    q_indices = range_[:, :d_model]
+    k_indices = range_[:, d_model : 2 * d_model]
+    v_indices = range_[:, 2 * d_model : 3 * d_model]
+    o1_indices = range_[:, 3 * d_model : 4 * d_model]
+    f_indices = range_[:, 4 * d_model : 8 * d_model]
+    o2_indices = range_[:, 8 * d_model : 9 * d_model]
+
+    for i in range(num_layers):
+        neuron_indices_ = [[] for _ in range(6)]
+        hidden_indices_ = [[] for _ in range(6)]
+
+        for j, k in enumerate(top_bottom_indices):
+            if k in q_indices[i]:
+                neuron_indices_[0].append(j)
+                hidden_indices_[0].append(k % (d_model * 9))
+            elif k in k_indices[i]:
+                neuron_indices_[1].append(j)
+                hidden_indices_[1].append(k % (d_model * 9) - d_model)
+            elif k in v_indices[i]:
+                neuron_indices_[2].append(j)
+                hidden_indices_[2].append(k % (d_model * 9) - 2 * d_model)
+            elif k in o1_indices[i]:
+                neuron_indices_[3].append(j)
+                hidden_indices_[3].append(k % (d_model * 9) - 3 * d_model)
+            elif k in f_indices[i]:
+                neuron_indices_[4].append(j)
+                hidden_indices_[4].append(k % (d_model * 9) - 4 * d_model)
+            elif k in o2_indices[i]:
+                neuron_indices_[5].append(j)
+                hidden_indices_[5].append(k % (d_model * 9) - 8 * d_model)
+
+        neuron_indices.append(neuron_indices_)
+        hidden_indices.append(hidden_indices_)
+
+    return neuron_indices, hidden_indices

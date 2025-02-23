@@ -48,8 +48,8 @@ class CustomXGLMAttention(XGLMAttention):
             key_states = torch.cat([past_key_value[0], key_states], dim=2)
             value_states = torch.cat([past_key_value[1], value_states], dim=2)
         else:
-            key_states = self._shape(self.k_proj(hidden_states), -1, bsz)  # (bsz, tgt_len, num_heads, head_dim)
-            value_states = self._shape(self.v_proj(hidden_states), -1, bsz)  # (bsz, tgt_len, num_heads, head_dim)
+            key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
+            value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
 
         if self.is_decoder:
             past_key_value = (key_states, value_states)
@@ -64,16 +64,13 @@ class CustomXGLMAttention(XGLMAttention):
             for i, j in zip(neuron_indices[0], hidden_indices[0]):
                 query_states[:, :, j] = fixed_neurons[i]
 
-            # ToDo: Fix this
-            # key_states = key_states.view(bsz, tgt_len, -1)
-            # for i, j in zip(neuron_indices[1], hidden_indices[1]):
-            #     key_states[:, :, j] = fixed_neurons[i]
-            # key_states = self._shape(key_states, -1, bsz)
+            key_states = key_states.view(bsz, tgt_len, -1)
+            for i, j in zip(neuron_indices[1], hidden_indices[1]):
+                key_states[:, :, j] = fixed_neurons[i]
 
-            # value_states = value_states.view(bsz, tgt_len, -1)
-            # for i, j in zip(neuron_indices[2], hidden_indices[2]):
-            #     value_states[:, :, j] = fixed_neurons[i]
-            # value_states = self._shape(value_states, -1, bsz)
+            value_states = value_states.view(bsz, tgt_len, -1)
+            for i, j in zip(neuron_indices[2], hidden_indices[2]):
+                value_states[:, :, j] = fixed_neurons[i]
 
         proj_shape = (bsz * self.num_heads, -1, self.head_dim)
         query_states = self._shape(query_states, tgt_len, bsz).view(*proj_shape)

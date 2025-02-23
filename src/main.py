@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--lm_name", type=str, default="facebook/xglm-564M")
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--plot", action="store_true")
+    parser.add_argument("--num_samples", type=int, default=100)
     args = parser.parse_args()
 
     # set seed
@@ -40,7 +41,7 @@ def main():
 
     if not os.path.exists(args.output_path + "/neurons.npy"):
         exp.detect()
-    exp.intervention()
+    exp.inference()
 
 
 if __name__ == "__main__":
