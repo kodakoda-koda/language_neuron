@@ -39,7 +39,7 @@ def main():
     # train and evaluate
     exp = Exp_main(args, logger)
 
-    if not os.path.exists(args.output_path + f"/{args.lm_name}/neurons.npy"):
+    if not os.path.exists(args.output_path + f"/{args.lm_name}/fixed_neurons.npy"):
         exp.detect()
     exp.inference()
 

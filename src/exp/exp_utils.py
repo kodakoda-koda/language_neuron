@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Dict
 
@@ -18,12 +19,12 @@ def average_precision(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
     cumulative_TP = np.cumsum(y_true_sorted, axis=0)
     cumulative_FP = np.cumsum(1 - y_true_sorted, axis=0)
 
-    precision = cumulative_TP / (cumulative_TP + cumulative_FP)
+    precision = cumulative_TP / (cumulative_TP + cumulative_FP + 1e-10)
 
-    return np.sum(precision * y_true_sorted, axis=0) / np.sum(y_true)
+    return np.sum(precision * y_true_sorted, axis=0) / (np.sum(y_true) + 1e-10)
 
 
-def compute_ap(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, Dict[str, np.ndarray]]:
+def compute_ap(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, Dict[str, list]]:
     neurons = min_max_scaler(neurons)
     indices = {}
     lang = ["en", "de", "fr", "es", "zh", "ja"]
@@ -38,40 +39,6 @@ def compute_ap(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, Dict[str, n
             "bottom": bottom_1000.tolist(),
         }
     return indices
-
-
-def plot_indices(indices: Dict[str, Dict[str, np.ndarray]], num_layers: int, plot_path: str, lm_name: str) -> None:
-    if not os.path.exists(plot_path):
-        os.makedirs(plot_path)
-
-    lang = ["en", "de", "fr", "es", "zh", "ja"]
-    for i, l in enumerate(lang):
-        top = indices[l]["top"]
-        middle = indices[l]["middle"]
-        bottom = indices[l]["bottom"]
-
-        plt.figure(figsize=(15, 5))
-        for j, idx in enumerate([top, middle, bottom]):
-            plt.subplot(1, 3, j + 1)
-            plt.hist(idx, bins=num_layers)
-            plt.xticks(np.arange(num_layers), np.arange(1, num_layers + 1))
-            plt.title(["top", "middle", "bottom"][j])
-        plt.suptitle(l)
-        plt.savefig(os.path.join(plot_path, lm_name, f"{l}.png"))
-        plt.close()
-
-    corr = np.zeros((len(lang), len(lang)))
-    for i, l1 in enumerate(lang):
-        for j, l2 in enumerate(lang):
-            l1_top_bottom = set(indices[l1]["top"]).union(set(indices[l1]["bottom"]))
-            l2_top_bottom = set(indices[l2]["top"]).union(set(indices[l2]["bottom"]))
-            corr[i, j] = len(l1_top_bottom.intersection(l2_top_bottom))
-
-    sns.heatmap(corr, annot=True)
-    plt.xticks(np.arange(len(lang)), lang)
-    plt.yticks(np.arange(len(lang)), lang)
-    plt.savefig(os.path.join(plot_path, lm_name, "heatmap.png"))
-    plt.close()
 
 
 def intervention_indices(num_layers, d_model, top_bottom_indices):
