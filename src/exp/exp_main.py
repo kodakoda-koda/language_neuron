@@ -61,6 +61,7 @@ class Exp_main(Exp_base):
             texts_ = []
             gen_kwargs = {"max_length": 64, "do_sample": True, "top_p": 0.9}
             for _ in range(self.args.num_samples):
+                # ToDo: support bloom model
                 outputs = self.model.generate(
                     input_ids=self.tokenizer.encode("</s>", return_tensors="pt").to(self.device),
                     fixed_neurons=torch.tensor(fixed_neurons[i]).to(device=self.device, dtype=self.dtype),

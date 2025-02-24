@@ -15,6 +15,7 @@ from transformers import AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
 from src.dataset.dataset import CustomDataset
 from src.exp.exp_utils import intervention_indices
+from src.model.bloom import CustomBloomForCausalLM
 from src.model.xglm import CustomXGLMForCausalLM
 
 
@@ -25,14 +26,28 @@ class Exp_base:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.bfloat16 if args.dtype == "bfloat16" else torch.float32
 
+        self.xglm_list = [
+            "facebook/xglm-564M",
+            "facebook/xglm-1.7B",
+            "facebook/xglm-2.9B",
+        ]
+        self.bloom_list = [
+            "bigscience/bloom-560m",
+            "bigscience/bloom-1b1",
+            "bigscience/bloom-1b7",
+        ]
+        self.lm_list = self.xglm_list + self.bloom_list
+
         self.model = self._build_model()
         self.tokenizer = self._bulid_tokenizer()
 
     def _build_model(self) -> PreTrainedModel:
-        model_list = ["facebook/xglm-564M", "facebook/xglm-1.7B", "facebook/xglm-2.9B"]
-        assert self.args.lm_name in model_list, f"Invalid model name: {self.args.lm_name}"
+        assert self.args.lm_name in self.lm_list, f"Invalid model name: {self.args.lm_name}"
 
-        model = CustomXGLMForCausalLM.from_pretrained(self.args.lm_name, torch_dtype=self.dtype)
+        if self.args.lm_name in self.bloom_list:
+            model = CustomBloomForCausalLM.from_pretrained(self.args.lm_name, torch_dtype=self.dtype)
+        else:
+            model = CustomXGLMForCausalLM.from_pretrained(self.args.lm_name, torch_dtype=self.dtype)
         model = model.to(self.device)
         return model
 
@@ -48,6 +63,7 @@ class Exp_base:
             # load paws-x dataset
             pawsx_ = load_dataset("google-research-datasets/paws-x", l)
             pawsx_ = pawsx_["train"]["sentence1"] + pawsx_["test"]["sentence1"] + pawsx_["validation"]["sentence1"]
+            pawsx_ = [p for p in pawsx_ if p != ""]
 
             # load flores-200 dataset
             flores_lang_set = {
@@ -64,6 +80,7 @@ class Exp_base:
                 flores_["dev"][f"sentence_{flores_lang.split('-')[0]}"]
                 + flores_["devtest"][f"sentence_{flores_lang.split('-')[0]}"]
             )
+            flores_ = [f for f in flores_ if f != ""]
 
             # sample 250 data from each dataset
             texts_ = random.sample(pawsx_, 250) + random.sample(flores_, 250)
@@ -82,6 +99,13 @@ class Exp_base:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
+        if self.args.lm_name in self.bloom_list:
+            num_layers = self.model.config.n_layer
+            d_model = self.model.config.hidden_size
+        else:
+            num_layers = self.model.config.num_layers
+            d_model = self.model.config.d_model
+
         lang = ["en", "de", "fr", "es", "zh", "ja"]
         fixed_neurons = []
         neuron_indices = []
@@ -91,9 +115,7 @@ class Exp_base:
             top_bottom_neurons = neurons[labels[:, lang.index(l)] == 1][:, top_bottom_indices]
             fixed_neurons_ = np.median(top_bottom_neurons, axis=0)
 
-            neuron_indices_, hidden_indices_ = intervention_indices(
-                self.model.config.num_layers, self.model.config.d_model, top_bottom_indices
-            )
+            neuron_indices_, hidden_indices_ = intervention_indices(num_layers, d_model, top_bottom_indices)
 
             fixed_neurons.append(fixed_neurons_)
             neuron_indices.append(neuron_indices_)
@@ -111,7 +133,13 @@ class Exp_base:
         if not os.path.exists(plot_path):
             os.makedirs(plot_path)
 
-        num_layers = self.model.config.num_layers
+        if self.args.lm_name in self.bloom_list:
+            num_layers = self.model.config.n_layer
+            num_neurons = num_layers * self.model.config.hidden_size * 9
+        else:
+            num_layers = self.model.config.num_layers
+            num_neurons = num_layers * self.model.config.d_model * 9
+
         lang = ["en", "de", "fr", "es", "zh", "ja"]
         for i, l in enumerate(lang):
             top = indices[l]["top"]
@@ -121,7 +149,7 @@ class Exp_base:
             plt.figure(figsize=(15, 5))
             for j, idx in enumerate([top, middle, bottom]):
                 plt.subplot(1, 3, j + 1)
-                plt.hist(idx, bins=num_layers)
+                plt.hist(idx, bins=num_layers, range=(0, num_neurons))
                 plt.xticks(np.arange(num_layers), np.arange(1, num_layers + 1))
                 plt.title(["top", "middle", "bottom"][j])
             plt.suptitle(l)
