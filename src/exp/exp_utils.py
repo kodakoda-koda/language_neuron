@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict
+from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,7 +41,7 @@ def compute_ap(neurons: np.ndarray, labels: np.ndarray) -> Dict[str, Dict[str, l
     return indices
 
 
-def intervention_indices(num_layers, d_model, top_bottom_indices):
+def intervention_indices(num_layers: int, d_model: int, top_bottom_indices: List[int]):
     neuron_indices = []
     hidden_indices = []
 

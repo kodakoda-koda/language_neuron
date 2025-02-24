@@ -29,6 +29,9 @@ class Exp_base:
         self.tokenizer = self._bulid_tokenizer()
 
     def _build_model(self) -> PreTrainedModel:
+        model_list = ["facebook/xglm-564M", "facebook/xglm-1.7B", "facebook/xglm-2.9B"]
+        assert self.args.lm_name in model_list, f"Invalid model name: {self.args.lm_name}"
+
         model = CustomXGLMForCausalLM.from_pretrained(self.args.lm_name, torch_dtype=self.dtype)
         model = model.to(self.device)
         return model
@@ -101,6 +104,10 @@ class Exp_base:
         json.dump(hidden_indices, open(os.path.join(output_path, "hidden_indices.json"), "w"))
 
     def plot_indices(self, indices: Dict[str, Dict[str, list]], plot_path: str) -> None:
+        """
+        Plot histogram of number of top, middle, and bottom neurons per layer for each language.
+        Also, plot heatmap of the number of common top and bottom neurons between languages.
+        """
         if not os.path.exists(plot_path):
             os.makedirs(plot_path)
 

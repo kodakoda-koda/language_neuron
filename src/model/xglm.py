@@ -54,12 +54,14 @@ class CustomXGLMAttention(XGLMAttention):
         if self.is_decoder:
             past_key_value = (key_states, value_states)
 
+        # for detecting neurons
         if output_neurons:
             query_states_ = query_states.view(bsz, tgt_len, -1)
             key_states_ = key_states.view(bsz, tgt_len, -1)
             value_states_ = value_states.view(bsz, tgt_len, -1)
             attn_neurons = torch.cat([attn_neurons, query_states_, key_states_, value_states_], dim=-1)
 
+        # for intervention
         if fixed_neurons is not None and neuron_indices is not None and hidden_indices is not None:
             for i, j in zip(neuron_indices[0], hidden_indices[0]):
                 query_states[:, :, j] = fixed_neurons[i]
@@ -134,9 +136,11 @@ class CustomXGLMAttention(XGLMAttention):
 
         attn_output = self.out_proj(attn_output)
 
+        # for detecting neurons
         if output_neurons:
             attn_neurons = torch.cat([attn_neurons, attn_output], dim=-1)
 
+        # for intervention
         if fixed_neurons is not None and neuron_indices is not None and hidden_indices is not None:
             for i, j in zip(neuron_indices[3], hidden_indices[3]):
                 attn_output[:, :, j] = fixed_neurons[i]
@@ -193,6 +197,7 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
 
+        # for detecting neurons
         if output_neurons:
             all_neurons = torch.cat([all_neurons, attn_neurons], dim=-1)
 
@@ -220,9 +225,11 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
         hidden_states = self.final_layer_norm(hidden_states)
         hidden_states = self.activation_fn(self.fc1(hidden_states))
 
+        # for detecting neurons
         if output_neurons:
             all_neurons = torch.cat([all_neurons, hidden_states], dim=-1)
 
+        # for intervention
         if neuron_indices is not None and fixed_neurons is not None and hidden_indices is not None:
             for i, j in zip(neuron_indices[4], hidden_indices[4]):
                 hidden_states[:, :, j] = fixed_neurons[i]
@@ -230,9 +237,11 @@ class CustomXGLMDecoderLayer(XGLMDecoderLayer):
         hidden_states = nn.functional.dropout(hidden_states, p=self.activation_dropout, training=self.training)
         hidden_states = self.fc2(hidden_states)
 
+        # for detecting neurons
         if output_neurons:
             all_neurons = torch.cat([all_neurons, hidden_states], dim=-1)
 
+        # for intervention
         if neuron_indices is not None and fixed_neurons is not None and hidden_indices is not None:
             for i, j in zip(neuron_indices[5], hidden_indices[5]):
                 hidden_states[:, :, j] = fixed_neurons[i]
@@ -338,7 +347,6 @@ class CustomXGLMModel(XGLMModel):
         all_cross_attentions = () if (output_attentions and encoder_hidden_states is not None) else None
         next_decoder_cache = () if use_cache else None
 
-        # neurons
         device = hidden_states.device
         dtype = hidden_states.dtype
         all_neurons = torch.tensor([]).to(device=device, dtype=dtype) if output_neurons else None
@@ -402,9 +410,11 @@ class CustomXGLMModel(XGLMModel):
                 if encoder_hidden_states is not None:
                     all_cross_attentions += (layer_outputs[2],)
 
+                # for detecting neurons
                 if output_neurons:
                     all_neurons = torch.cat([all_neurons, layer_outputs[4 if use_cache else 3]], dim=-1)
             else:
+                # for detecting neurons
                 if output_neurons:
                     all_neurons = torch.cat([all_neurons, layer_outputs[2 if use_cache else 1]], dim=-1)
 
@@ -413,6 +423,7 @@ class CustomXGLMModel(XGLMModel):
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
 
+        # for detecting neurons
         if output_neurons:
             pad_token_indices = torch.where(input_ids == self.config.pad_token_id)
             all_neurons[pad_token_indices[0], pad_token_indices[1], :] = torch.nan
