@@ -13,10 +13,10 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
-from src.dataset.dataset import CustomDataset
-from src.exp.exp_utils import intervention_indices
-from src.model.bloom import CustomBloomForCausalLM
-from src.model.xglm import CustomXGLMForCausalLM
+from dataset.dataset import CustomDataset
+from exp.exp_utils import intervention_indices
+from model.bloom import CustomBloomForCausalLM
+from model.xglm import CustomXGLMForCausalLM
 
 
 class Exp_base:

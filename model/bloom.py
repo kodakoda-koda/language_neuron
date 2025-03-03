@@ -15,7 +15,7 @@ from transformers.models.bloom.modeling_bloom import (
 )
 from transformers.utils import is_torchdynamo_compiling
 
-from src.model.outputs import CustomBaseModelOutputWithPastAndCrossAttentions, CustomCausalLMOutputWithCrossAttentions
+from model.outputs import CustomBaseModelOutputWithPastAndCrossAttentions, CustomCausalLMOutputWithCrossAttentions
 
 
 class CustomBloomAttention(BloomAttention):

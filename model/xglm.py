@@ -8,7 +8,7 @@ from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask, _p
 from transformers.models.xglm.modeling_xglm import XGLMAttention, XGLMDecoderLayer
 from transformers.utils import logging
 
-from src.model.outputs import CustomBaseModelOutputWithPastAndCrossAttentions, CustomCausalLMOutputWithCrossAttentions
+from model.outputs import CustomBaseModelOutputWithPastAndCrossAttentions, CustomCausalLMOutputWithCrossAttentions
 
 logger = logging.get_logger(__name__)
 

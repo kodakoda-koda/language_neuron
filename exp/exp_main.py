@@ -4,8 +4,8 @@ import os
 import numpy as np
 import torch
 
-from src.exp.exp_base import Exp_base
-from src.exp.exp_utils import compute_ap
+from exp.exp_base import Exp_base
+from exp.exp_utils import compute_ap
 
 
 class Exp_main(Exp_base):
