@@ -33,8 +33,8 @@ class Exp_base:
         ]
         self.bloom_list = [
             "bigscience/bloom-560m",
-            "bigscience/bloom-1b1",
             "bigscience/bloom-1b7",
+            "bigscience/bloom-3b",
         ]
         self.lm_list = self.xglm_list + self.bloom_list
 

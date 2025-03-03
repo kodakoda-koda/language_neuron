@@ -1,10 +1,10 @@
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 from transformers import BloomConfig
-from transformers.cache_utils import Cache, DynamicCache
+from transformers.cache_utils import Cache, DynamicCache, StaticCache
 from transformers.models.bloom.modeling_bloom import (
     BloomAttention,
     BloomBlock,
@@ -13,6 +13,7 @@ from transformers.models.bloom.modeling_bloom import (
     BloomModel,
     dropout_add,
 )
+from transformers.utils import is_torchdynamo_compiling
 
 from src.model.outputs import CustomBaseModelOutputWithPastAndCrossAttentions, CustomCausalLMOutputWithCrossAttentions
 
@@ -30,6 +31,9 @@ class CustomBloomAttention(BloomAttention):
         output_attentions: bool = False,
         cache_position: Optional[torch.LongTensor] = None,
         output_neurons: bool = False,
+        fixed_neurons: Optional[torch.Tensor] = None,
+        neuron_indices: Optional[List[List[int]]] = None,
+        hidden_indices: Optional[List[List[int]]] = None,
     ):
         batch_size, q_length, _ = hidden_states.shape
         device = hidden_states.device
@@ -49,6 +53,23 @@ class CustomBloomAttention(BloomAttention):
             key_layer_ = key_layer.reshape(batch_size, q_length, -1)
             value_layer_ = value_layer.reshape(batch_size, q_length, -1)
             attn_neurons = torch.cat([attn_neurons, query_layer_, key_layer_, value_layer_], dim=-1)
+
+        # for intervention
+        if neuron_indices is not None and fixed_neurons is not None and hidden_indices is not None:
+            query_layer = query_layer.reshape(batch_size, q_length, -1)
+            for i, j in zip(neuron_indices[0], hidden_indices[0]):
+                query_layer[:, :, j] = fixed_neurons[i]
+            query_layer = query_layer.reshape(batch_size, q_length, -1, self.head_dim).transpose(1, 2)
+
+            key_layer = key_layer.reshape(batch_size, q_length, -1)
+            for i, j in zip(neuron_indices[1], hidden_indices[1]):
+                key_layer[:, :, j] = fixed_neurons[i]
+            key_layer = key_layer.reshape(batch_size, q_length, -1, self.head_dim).transpose(1, 2)
+
+            value_layer = value_layer.reshape(batch_size, q_length, -1)
+            for i, j in zip(neuron_indices[2], hidden_indices[2]):
+                value_layer[:, :, j] = fixed_neurons[i]
+            value_layer = value_layer.reshape(batch_size, q_length, -1, self.head_dim).transpose(1, 2)
 
         query_layer = query_layer.reshape(batch_size * self.num_heads, -1, self.head_dim)
         key_layer = key_layer.reshape(batch_size * self.num_heads, -1, self.head_dim).transpose(-1, -2)
@@ -92,8 +113,12 @@ class CustomBloomAttention(BloomAttention):
 
         # for detecting neurons
         if output_neurons:
-            output_tensor_ = output_tensor.view(batch_size, q_length, -1)
-            attn_neurons = torch.cat([attn_neurons, output_tensor_], dim=-1)
+            attn_neurons = torch.cat([attn_neurons, output_tensor], dim=-1)
+
+        # for intervention
+        if neuron_indices is not None and fixed_neurons is not None and hidden_indices is not None:
+            for i, j in zip(neuron_indices[3], hidden_indices[3]):
+                output_tensor[:, :, j] = fixed_neurons[i]
 
         output_tensor = dropout_add(output_tensor, residual, self.hidden_dropout, self.training)
 
@@ -108,7 +133,13 @@ class CustomBloomAttention(BloomAttention):
 
 class CustomBloomMLP(BloomMLP):
     def forward(
-        self, hidden_states: torch.Tensor, residual: torch.Tensor, output_neurons: bool = False
+        self,
+        hidden_states: torch.Tensor,
+        residual: torch.Tensor,
+        output_neurons: bool = False,
+        fixed_neurons: Optional[torch.Tensor] = None,
+        neuron_indices: Optional[List[List[int]]] = None,
+        hidden_indices: Optional[List[List[int]]] = None,
     ) -> torch.Tensor:
         device = hidden_states.device
         dtype = hidden_states.dtype
@@ -119,6 +150,11 @@ class CustomBloomMLP(BloomMLP):
         # for detecting neurons
         if output_neurons:
             mlp_neurons = torch.cat([mlp_neurons, hidden_states], dim=-1)
+
+        # for intervention
+        if neuron_indices is not None and fixed_neurons is not None and hidden_indices is not None:
+            for i, j in zip(neuron_indices[0], hidden_indices[0]):
+                hidden_states[:, :, j] = fixed_neurons[i]
 
         if self.pretraining_tp > 1 and self.slow_but_exact:
             intermediate_output = torch.zeros_like(residual)
@@ -134,6 +170,11 @@ class CustomBloomMLP(BloomMLP):
         # for detecting neurons
         if output_neurons:
             mlp_neurons = torch.cat([mlp_neurons, intermediate_output], dim=-1)
+
+        # for intervention
+        if neuron_indices is not None and fixed_neurons is not None and hidden_indices is not None:
+            for i, j in zip(neuron_indices[1], hidden_indices[1]):
+                intermediate_output[:, :, j] = fixed_neurons[i]
 
         output = dropout_add(intermediate_output, residual, self.hidden_dropout, self.training)
         outputs = (output, mlp_neurons)
@@ -158,6 +199,9 @@ class CustomBloomBlock(BloomBlock):
         output_attentions: bool = False,
         cache_position: Optional[torch.LongTensor] = None,
         output_neurons: bool = False,
+        fixed_neurons: Optional[torch.Tensor] = None,
+        neuron_indices: Optional[List[int]] = None,
+        hidden_indices: Optional[List[int]] = None,
     ):
         # hidden_states: [batch_size, seq_length, hidden_size]
         device = hidden_states.device
@@ -182,6 +226,9 @@ class CustomBloomBlock(BloomBlock):
             output_attentions=output_attentions,
             cache_position=cache_position,
             output_neurons=output_neurons,
+            fixed_neurons=fixed_neurons,
+            neuron_indices=neuron_indices[:4] if neuron_indices is not None else None,
+            hidden_indices=hidden_indices[:4] if hidden_indices is not None else None,
         )
 
         attention_output = attn_outputs[0]
@@ -199,7 +246,14 @@ class CustomBloomBlock(BloomBlock):
         else:
             residual = attention_output
 
-        mlp_outputs = self.mlp(layernorm_output, residual, output_neurons)
+        mlp_outputs = self.mlp(
+            hidden_states=layernorm_output,
+            residual=residual,
+            output_neurons=output_neurons,
+            fixed_neurons=fixed_neurons,
+            neuron_indices=neuron_indices[4:] if neuron_indices is not None else None,
+            hidden_indices=hidden_indices[4:] if hidden_indices is not None else None,
+        )
 
         if use_cache:
             outputs = (mlp_outputs[0],) + outputs
@@ -235,6 +289,9 @@ class CustomBloomModel(BloomModel):
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         output_neurons: Optional[bool] = None,
+        fixed_neurons: Optional[torch.Tensor] = None,
+        neuron_indices: Optional[List[List[int]]] = None,
+        hidden_indices: Optional[List[List[int]]] = None,
         **deprecated_arguments,
     ) -> Union[Tuple[torch.Tensor, ...], CustomBaseModelOutputWithPastAndCrossAttentions]:
         if len(deprecated_arguments) > 0:
@@ -319,6 +376,9 @@ class CustomBloomModel(BloomModel):
                     alibi=alibi,
                     cache_position=cache_position,
                     output_neurons=output_neurons,
+                    fixed_neurons=fixed_neurons,
+                    neuron_indices=neuron_indices[i] if neuron_indices is not None else None,
+                    hidden_indices=hidden_indices[i] if hidden_indices is not None else None,
                 )
 
             hidden_states = outputs[0]
@@ -368,7 +428,56 @@ class CustomBloomForCausalLM(BloomForCausalLM):
 
         self.post_init()
 
-    # ToDo: add intervention
+    def prepare_inputs_for_generation(
+        self,
+        input_ids,
+        past_key_values=None,
+        attention_mask=None,
+        inputs_embeds=None,
+        cache_position=None,
+        use_cache=None,
+        fixed_neurons=None,
+        neuron_indices=None,
+        hidden_indices=None,
+        **kwargs,
+    ):
+        if past_key_values is not None:
+            if inputs_embeds is not None and input_ids.shape[1] == 0:
+                inputs_embeds = inputs_embeds[:, -cache_position.shape[0] :]
+            elif inputs_embeds is not None or (is_torchdynamo_compiling() or cache_position[-1] >= input_ids.shape[1]):
+                input_ids = input_ids[:, -cache_position.shape[0] :]
+            elif input_ids.shape[1] != cache_position.shape[0]:
+                input_ids = input_ids[:, cache_position]
+
+        if inputs_embeds is not None and len(cache_position) == inputs_embeds.shape[1]:
+            model_inputs = {"inputs_embeds": inputs_embeds, "input_ids": None}
+        else:
+            model_inputs = {"input_ids": input_ids.clone(memory_format=torch.contiguous_format), "inputs_embeds": None}
+
+        if isinstance(past_key_values, StaticCache) and attention_mask is not None:
+            target_length = past_key_values.get_max_cache_shape()
+            batch_size, seq_length = attention_mask.shape
+            diff = target_length - seq_length
+
+            new_attn_mask = torch.zeros(batch_size, diff, device=attention_mask.device, dtype=attention_mask.dtype)
+            attention_mask = torch.cat(
+                [attention_mask, new_attn_mask],
+                dim=-1,
+            )
+
+        model_inputs.update(
+            {
+                "cache_position": cache_position,
+                "past_key_values": past_key_values,
+                "use_cache": use_cache,
+                "attention_mask": attention_mask,
+                "fixed_neurons": fixed_neurons,
+                "neuron_indices": neuron_indices,
+                "hidden_indices": hidden_indices,
+            }
+        )
+        return model_inputs
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -383,6 +492,9 @@ class CustomBloomForCausalLM(BloomForCausalLM):
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         output_neurons: Optional[bool] = None,
+        fixed_neurons: Optional[torch.Tensor] = None,
+        neuron_indices: Optional[List[List[int]]] = None,
+        hidden_indices: Optional[List[List[int]]] = None,
         **deprecated_arguments,
     ) -> Union[Tuple[torch.Tensor], CustomCausalLMOutputWithCrossAttentions]:
         num_items_in_batch = deprecated_arguments.pop("num_items_in_batch", None)
@@ -403,6 +515,9 @@ class CustomBloomForCausalLM(BloomForCausalLM):
             return_dict=return_dict,
             cache_position=cache_position,
             output_neurons=output_neurons,
+            fixed_neurons=fixed_neurons,
+            neuron_indices=neuron_indices,
+            hidden_indices=hidden_indices,
         )
         hidden_states = transformer_outputs[0]
 
